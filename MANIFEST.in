@@ -1,0 +1,16 @@
+include README.md
+include LICENSE
+include requirements.txt
+recursive-include mlflow_mongodb *.py
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude debug_*.py
+global-exclude test_*.py
+global-exclude check_*.py
+global-exclude monitor_*.py
+global-exclude demo_*.py
+global-exclude *.log
+global-exclude *.db
+global-exclude .venv
+global-exclude .pytest_cache

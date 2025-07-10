@@ -1,0 +1,5 @@
+pymongo
+mlflow
+pandas
+bson
+pytest

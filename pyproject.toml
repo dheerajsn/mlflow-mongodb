@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlflow-mongodb"
+version = "1.0.0"
+description = "MongoDB backend for MLflow tracking and model registry"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "MLflow MongoDB Plugin Contributors"}
+]
+keywords = ["mlflow", "mongodb", "machine-learning", "tracking", "model-registry"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research", 
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "mlflow>=2.0.0",
+    "pymongo>=4.0.0",
+    "urllib3>=1.26.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/mlflow-mongodb"
+Repository = "https://github.com/yourusername/mlflow-mongodb"
+Documentation = "https://github.com/yourusername/mlflow-mongodb#readme"
+"Bug Reports" = "https://github.com/yourusername/mlflow-mongodb/issues"
+
+[project.entry-points."mlflow.tracking_store"]
+mongodb = "mlflow_mongodb.tracking.mongodb_store:MongoDbTrackingStore"
+
+[project.entry-points."mlflow.model_registry_store"] 
+mongodb = "mlflow_mongodb.model_registry.mongodb_store:MongoDbModelRegistryStore"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mlflow_mongodb*"]
+exclude = ["tests*", "debug_*", "test_*", "check_*", "monitor_*", "demo_*"]
