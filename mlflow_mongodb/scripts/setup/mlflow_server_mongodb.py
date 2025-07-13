@@ -37,23 +37,26 @@ def check_mongodb_connection():
 def install_plugin():
     """Install the MLflow MongoDB plugin"""
     logger.info("Installing MLflow MongoDB plugin...")
-    
+
     try:
+        # Get the mlflow_mongodb package directory (3 levels up from this script)
+        package_dir = Path(__file__).parent.parent.parent
+
         # Install plugin in development mode
         result = subprocess.run(
             [sys.executable, "-m", "pip", "install", "-e", "."],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent
+            cwd=package_dir
         )
-        
+
         if result.returncode == 0:
             logger.info("✓ Plugin installed successfully")
             return True
         else:
             logger.error(f"✗ Plugin installation failed: {result.stderr}")
             return False
-            
+
     except Exception as e:
         logger.error(f"✗ Plugin installation error: {e}")
         return False
@@ -106,7 +109,7 @@ def test_mongodb_stores():
         from mlflow.tracking._tracking_service.utils import _get_store
         from mlflow.tracking._model_registry.utils import _get_store as _get_model_registry_store
 
-        mongodb_uri = "mongodb://username:passwordlocalhost:27017/mlflow"
+        mongodb_uri = "mongodb://admin:password@localhost:27017/mlflow"
 
         # Test tracking store
         tracking_store = _get_store(mongodb_uri)
@@ -148,7 +151,7 @@ def test_mlflow_client():
     try:
         import mlflow
         
-        mongodb_uri = "mongodb://username:passwordlocalhost:27017/mlflow"
+        mongodb_uri = "mongodb://admin:password@localhost:27017/mlflow"
         
         # Set tracking and registry URIs
         mlflow.set_tracking_uri(mongodb_uri)
@@ -183,7 +186,12 @@ def start_mlflow_server():
 
     try:
         # MongoDB URIs
-        mongodb_uri = "mongodb://username:passwordlocalhost:27017/mlflow"
+        mongodb_uri = "mongodb://admin:password@localhost:27017/mlflow"
+
+        # Set up artifacts directory
+        artifacts_dir = Path.cwd() / "mlflow_artifacts"
+        artifacts_dir.mkdir(exist_ok=True)
+
         env = os.environ.copy()
         env["MLFLOW_TRACKING_URI"] = mongodb_uri
         env["MLFLOW_REGISTRY_URI"] = mongodb_uri
