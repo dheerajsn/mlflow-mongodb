@@ -130,73 +130,6 @@ def test_mongodb_stores():
         traceback.print_exc()
         return False
 
-def test_trace_artifacts():
-    """Test trace artifacts functionality"""
-    logger.info("Testing trace artifacts...")
-
-    try:
-        from mlflow_mongodb.tracking.mongodb_store import MongoDbTrackingStore
-        from mlflow.store.artifact.artifact_repository_registry import get_artifact_repository
-
-        mongodb_uri = "mongodb://username:passwordlocalhost:27017/mlflow"
-        store = MongoDbTrackingStore(mongodb_uri)
-
-        # Check if there are any existing traces
-        traces_count = store.traces_collection.count_documents({})
-        logger.info(f"✓ Found {traces_count} traces in MongoDB")
-
-        if traces_count > 0:
-            # Get a sample trace
-            sample_trace = store.traces_collection.find_one()
-            request_id = sample_trace['request_id']
-
-            # Ensure trace has artifact location tag
-            if 'mlflow.artifactLocation' not in sample_trace.get('tags', {}):
-                artifact_location = f"mongodb://mlflow/traces/{request_id}/artifacts"
-                store.traces_collection.update_one(
-                    {"request_id": request_id},
-                    {"$set": {"tags.mlflow.artifactLocation": artifact_location}}
-                )
-                logger.info(f"✓ Added artifact location to trace {request_id}")
-
-            # Test artifact repository
-            artifact_uri = f"mongodb://mlflow/traces/{request_id}/artifacts"
-            repo = get_artifact_repository(artifact_uri)
-            logger.info(f"✓ Artifact repository created: {type(repo).__name__}")
-
-            # Create sample artifact data if it doesn't exist
-            try:
-                artifact_data = store.get_trace_artifact(request_id)
-                logger.info(f"✓ Found existing artifact data with {len(artifact_data.get('spans', []))} spans")
-            except:
-                # Create sample artifact data
-                artifact_data = {
-                    "experiment_id": sample_trace.get('experiment_id'),
-                    "spans": [
-                        {
-                            "name": "Sample Span",
-                            "context": {"span_id": "0x123", "trace_id": "0x456"},
-                            "start_time": 1000000000,
-                            "end_time": 1000001000,
-                            "status_code": "OK",
-                            "inputs": {"query": "test"},
-                            "outputs": {"response": "test response"}
-                        }
-                    ],
-                    "request_metadata": sample_trace.get('request_metadata', {}),
-                    "tags": sample_trace.get('tags', {})
-                }
-                store.store_trace_artifact(request_id, artifact_data)
-                logger.info(f"✓ Created sample artifact data for trace {request_id}")
-
-        return True
-
-    except Exception as e:
-        logger.error(f"✗ Trace artifacts test failed: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
 def setup_monitoring():
     """Set up monitoring for API calls"""
     try:
@@ -244,70 +177,6 @@ def test_mlflow_client():
         traceback.print_exc()
         return False
 
-def create_mongodb_artifact_patch():
-    """Create a patch file to register MongoDB artifacts in the server process"""
-    logger.info("Creating MongoDB artifact patch...")
-
-    try:
-        # Create a comprehensive patch that handles MongoDB artifacts
-        patch_content = '''
-# MongoDB Artifact Repository Registration Patch
-# This file is automatically imported to register MongoDB artifacts
-
-import sys
-import os
-
-# Add current directory to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-# Register MongoDB artifact repository
-try:
-    from mlflow.store.artifact.artifact_repository_registry import _artifact_repository_registry
-    from mlflow_mongodb.artifact_repo import get_mongodb_artifact_repository
-
-    # Register the mongodb scheme
-    _artifact_repository_registry.register("mongodb", get_mongodb_artifact_repository)
-    print("✓ MongoDB artifact repository registered via patch")
-
-    # Also monkey patch the get_artifact_repository function as backup
-    from mlflow.store.artifact import artifact_repository_registry
-
-    original_get_artifact_repository = artifact_repository_registry.get_artifact_repository
-
-    def patched_get_artifact_repository(artifact_uri):
-        """Patched version that handles MongoDB URIs"""
-        if artifact_uri.startswith("mongodb://"):
-            try:
-                return get_mongodb_artifact_repository(artifact_uri)
-            except Exception as e:
-                print(f"Failed to create MongoDB artifact repository: {e}")
-                raise
-        return original_get_artifact_repository(artifact_uri)
-
-    # Replace the function
-    artifact_repository_registry.get_artifact_repository = patched_get_artifact_repository
-    print("✓ MongoDB artifact repository globally patched")
-
-except Exception as e:
-    print(f"✗ MongoDB artifact registration failed: {e}")
-    import traceback
-    traceback.print_exc()
-'''
-
-        # Write the patch file
-        patch_file = Path("mongodb_artifact_patch.py")
-        with open(patch_file, "w") as f:
-            f.write(patch_content)
-
-        logger.info(f"✓ Created MongoDB artifact patch: {patch_file}")
-        return True
-
-    except Exception as e:
-        logger.error(f"✗ Failed to create patch: {e}")
-        return False
-
 def start_mlflow_server():
     """Start MLflow server using the mlflow command"""
     logger.info("Starting MLflow server...")
@@ -315,15 +184,6 @@ def start_mlflow_server():
     try:
         # MongoDB URIs
         mongodb_uri = "mongodb://username:passwordlocalhost:27017/mlflow"
-
-        # Create artifacts directory
-        artifacts_dir = Path("./mlflow-artifacts")
-        artifacts_dir.mkdir(exist_ok=True)
-
-        # Create MongoDB artifact patch
-        create_mongodb_artifact_patch()
-
-        # Set environment variables
         env = os.environ.copy()
         env["MLFLOW_TRACKING_URI"] = mongodb_uri
         env["MLFLOW_REGISTRY_URI"] = mongodb_uri
@@ -436,11 +296,6 @@ def main():
     # Test MongoDB stores
     if not test_mongodb_stores():
         logger.error("MongoDB stores test failed")
-        return False
-
-    # Test trace artifacts
-    if not test_trace_artifacts():
-        logger.error("Trace artifacts test failed")
         return False
 
     # Set up monitoring
