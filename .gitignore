@@ -90,3 +90,5 @@ artifacts/models/*
 /scripts/setup
 /examples
 /setup.py
+/mlflow-artifacts
+/.newvenv

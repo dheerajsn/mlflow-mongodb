@@ -20,6 +20,7 @@ from mlflow.entities import (
     Run,
     RunInfo,
     RunData,
+    RunInputs,
     RunStatus,
     ViewType,
     LifecycleStage,
@@ -29,6 +30,7 @@ from mlflow.entities import (
     ExperimentTag,
     TraceInfoV2,
     DatasetInput,
+    LoggedModel,
 )
 from mlflow.entities.metric import MetricWithRunId
 from mlflow.entities.trace_status import TraceStatus
@@ -187,11 +189,16 @@ class MongoDbTrackingStore(AbstractStore):
                 tags.append(ExperimentTag(key=tag_dict["key"], value=tag_dict["value"]))
             else:
                 tags.append(tag_dict)
-        
+
+        # Ensure artifact_location is always a string (protobuf requirement)
+        artifact_location = doc.get("artifact_location")
+        if artifact_location is None:
+            artifact_location = ""
+
         return Experiment(
             experiment_id=doc["experiment_id"],
             name=doc["name"],
-            artifact_location=doc.get("artifact_location"),
+            artifact_location=artifact_location,
             lifecycle_stage=doc.get("lifecycle_stage", LifecycleStage.ACTIVE),
             creation_time=doc.get("creation_time"),
             last_update_time=doc.get("last_update_time"),
@@ -211,11 +218,14 @@ class MongoDbTrackingStore(AbstractStore):
             artifact_uri=doc.get("artifact_uri"),
             run_name=doc.get("name"),
         )
-        
+
         # Get run data (params, metrics, tags)
         run_data = self._get_run_data(doc["run_uuid"])
-        
-        return Run(run_info, run_data)
+
+        # Get run inputs (dataset inputs)
+        run_inputs = self._get_run_inputs(doc["run_uuid"])
+
+        return Run(run_info, run_data, run_inputs)
     
     def _get_run_data(self, run_id: str) -> RunData:
         """Get run data (params, metrics, tags) for a run"""
@@ -240,6 +250,45 @@ class MongoDbTrackingStore(AbstractStore):
             tags.append(RunTag(tag_doc["key"], tag_doc["value"]))
 
         return RunData(metrics=metrics, params=params, tags=tags)
+
+    def _get_run_inputs(self, run_id: str) -> RunInputs:
+        """Get run inputs (dataset inputs) for a run"""
+        # Get dataset inputs
+        dataset_inputs = []
+        for dataset_doc in self.dataset_inputs_collection.find({"run_uuid": run_id}):
+            try:
+                # Reconstruct DatasetInput from stored document
+                from mlflow.entities import Dataset
+                from mlflow.entities.dataset_input import DatasetInput
+                from mlflow.entities.input_tag import InputTag
+
+                # Create Dataset entity
+                dataset_data = dataset_doc["dataset"]
+                dataset = Dataset(
+                    name=dataset_data["name"],
+                    digest=dataset_data["digest"],
+                    source_type=dataset_data["source_type"],
+                    source=dataset_data["source"],
+                    schema=dataset_data.get("schema"),
+                    profile=dataset_data.get("profile")
+                )
+
+                # Create input tags
+                input_tags = []
+                for tag_data in dataset_doc.get("tags", []):
+                    input_tags.append(InputTag(key=tag_data["key"], value=tag_data["value"]))
+
+                # Create DatasetInput
+                dataset_input = DatasetInput(dataset=dataset, tags=input_tags)
+                dataset_inputs.append(dataset_input)
+
+            except Exception as e:
+                # Log warning but continue - don't fail the entire run retrieval
+                _logger.warning(f"Failed to reconstruct dataset input for run {run_id}: {e}")
+                continue
+
+        # Always return RunInputs object, even if empty
+        return RunInputs(dataset_inputs=dataset_inputs)
     
     # Experiment methods
     def search_experiments(
@@ -309,10 +358,13 @@ class MongoDbTrackingStore(AbstractStore):
         experiment_id = self._generate_experiment_id()
         current_time = get_current_time_millis()
 
+        # Ensure artifact_location is never None
+        final_artifact_location = artifact_location or self.artifact_uri or ""
+
         experiment_doc = {
             "experiment_id": experiment_id,
             "name": name,
-            "artifact_location": artifact_location or self.artifact_uri,
+            "artifact_location": final_artifact_location,
             "lifecycle_stage": LifecycleStage.ACTIVE,
             "creation_time": current_time,
             "last_update_time": current_time,
@@ -775,6 +827,66 @@ class MongoDbTrackingStore(AbstractStore):
             {"run_id": run_id, "artifact_path": model_doc["artifact_path"]},
             {"$set": {k: v for k, v in model_doc.items() if k != "_id"}},
             upsert=True
+        )
+
+    def create_logged_model(self, experiment_id: str, name: Optional[str] = None,
+                           source_run_id: Optional[str] = None, tags: Optional[List] = None,
+                           params: Optional[List] = None, model_type: Optional[str] = None) -> LoggedModel:
+        """Create a new logged model"""
+        from mlflow.entities.logged_model_status import LoggedModelStatus
+        import uuid
+
+        # Verify experiment exists
+        if not self.experiments_collection.find_one({"experiment_id": experiment_id}):
+            raise MlflowException(
+                f"Experiment '{experiment_id}' not found",
+                RESOURCE_DOES_NOT_EXIST
+            )
+
+        # Generate model ID and name if not provided
+        model_id = str(uuid.uuid4())
+        if name is None:
+            name = f"model_{model_id[:8]}"
+
+        current_time = get_current_time_millis()
+
+        # Create artifact location (this would typically be handled by the artifact store)
+        artifact_location = f"experiments/{experiment_id}/models/{model_id}"
+
+        # Create logged model document
+        model_doc = {
+            "experiment_id": experiment_id,
+            "model_id": model_id,
+            "name": name,
+            "artifact_location": artifact_location,
+            "creation_timestamp": current_time,
+            "last_updated_timestamp": current_time,
+            "model_type": model_type,
+            "source_run_id": source_run_id,
+            "status": LoggedModelStatus.READY.value,
+            "status_message": None,
+            "tags": [{"key": tag.key, "value": tag.value} for tag in (tags or [])],
+            "params": [{"key": param.key, "value": param.value} for param in (params or [])],
+        }
+
+        # Insert into logged models collection
+        self.logged_models_collection.insert_one(model_doc)
+
+        # Create and return LoggedModel entity
+        return LoggedModel(
+            experiment_id=experiment_id,
+            model_id=model_id,
+            name=name,
+            artifact_location=artifact_location,
+            creation_timestamp=current_time,
+            last_updated_timestamp=current_time,
+            model_type=model_type,
+            source_run_id=source_run_id,
+            status=LoggedModelStatus.READY,
+            status_message=None,
+            tags=tags or [],
+            params=params or [],
+            metrics=[]
         )
 
     def log_inputs(self, run_id: str, datasets: List[DatasetInput]) -> None:

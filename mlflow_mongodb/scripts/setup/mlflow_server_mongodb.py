@@ -189,7 +189,7 @@ def start_mlflow_server():
         mongodb_uri = "mongodb://admin:password@localhost:27017/mlflow"
 
         # Set up artifacts directory
-        artifacts_dir = Path.cwd() / "mlflow_artifacts"
+        artifacts_dir = Path.cwd() / "mlflow-artifacts"
         artifacts_dir.mkdir(exist_ok=True)
 
         env = os.environ.copy()
