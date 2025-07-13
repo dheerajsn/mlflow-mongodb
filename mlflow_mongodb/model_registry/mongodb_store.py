@@ -901,21 +901,32 @@ class MongoDbModelRegistryStore(AbstractStore):
         
         return self._prompt_doc_to_entity(doc)
     
-    def get_prompt_version(self, prompt_name: str, version: str) -> PromptVersion:
+    def get_prompt_version(self, prompt_name: str, version: str, _from_alias: bool = False) -> PromptVersion:
         """Get specific prompt version"""
-        doc = self.model_versions_collection.find_one({
-            "name": prompt_name,
-            "version": int(version)
-        })
+        try:
+            version_int = int(version)
+            doc = self.model_versions_collection.find_one({
+                "name": prompt_name,
+                "version": version_int
+            })
+        except ValueError:
+            # Avoid infinite loop: only try alias lookup if not already coming from alias
+            if _from_alias:
+                raise MlflowException(
+                    f"Invalid version '{version}' for prompt '{prompt_name}'",
+                    INVALID_PARAMETER_VALUE
+                )
+            return self.get_prompt_version_by_alias(prompt_name, version)
+
         if not doc:
             raise MlflowException(
-                f"Prompt version '{prompt_name}' version '{version}' not found",
+                f"Prompt version '{version}' not found for prompt '{prompt_name}'",
                 RESOURCE_DOES_NOT_EXIST
             )
-        
+
         # Check if it's actually a prompt
         prompt_tag = self.registered_model_tags_collection.find_one({
-            "name": prompt_name, 
+            "name": prompt_name,
             "key": "mlflow.prompt.is_prompt"
         })
         if not prompt_tag:
@@ -923,5 +934,21 @@ class MongoDbModelRegistryStore(AbstractStore):
                 f"'{prompt_name}' is not a prompt",
                 INVALID_PARAMETER_VALUE
             )
-        
+
         return self._prompt_version_doc_to_entity(doc)
+    
+    def get_prompt_version_by_alias(self, name: str, alias: str) -> Optional[PromptVersion]:
+        """Get model version by alias"""
+        alias_doc = self.registered_model_aliases_collection.find_one({
+            "name": name,
+            "alias": alias
+        })
+
+        if not alias_doc:
+            raise MlflowException(
+                f"Registered model alias '{alias}' not found for model '{name}'",
+                RESOURCE_DOES_NOT_EXIST
+            )
+
+        # Pass _from_alias=True to prevent infinite loop
+        return self.get_prompt_version(name, str(alias_doc["version"]), _from_alias=True)

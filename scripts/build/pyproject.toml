@@ -29,7 +29,7 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "mlflow>=2.0.0",
+    "mlflow>=3.0.0",
     "pymongo>=4.0.0",
     "urllib3>=1.26.0",
 ]

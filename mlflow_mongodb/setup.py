@@ -10,13 +10,14 @@ from setuptools import setup, find_packages
 
 setup(
     name="mlflow-mongodb",
-    version="1.0.0",
+    version="1.1.0",
     description="MongoDB backend for MLflow tracking and model registry",
     author="MongoDB MLflow Plugin",
     author_email="support@example.com",
-    packages=find_packages(),
+    py_modules=["__init__", "db_utils", "registration"],
+    packages=["tracking", "model_registry"],
     install_requires=[
-        "mlflow>=2.0.0",
+        "mlflow>=3.0.0",
         "pymongo>=4.0.0",
         "urllib3>=1.26.0",
     ],

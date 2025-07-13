@@ -5,39 +5,46 @@ This module provides functions to register MongoDB stores with MLflow.
 """
 
 from typing import Optional
-from mlflow_mongodb.tracking.mongodb_store import MongoDbTrackingStore
-from mlflow_mongodb.model_registry.mongodb_store import MongoDbModelRegistryStore
 
 
-def get_mongodb_tracking_store(store_uri: str, artifact_uri: Optional[str] = None) -> MongoDbTrackingStore:
+def get_mongodb_tracking_store(store_uri: str, artifact_uri: Optional[str] = None):
     """
     Get MongoDB tracking store instance.
-    
+
     Args:
         store_uri: MongoDB connection URI
         artifact_uri: Artifact store URI (optional)
-        
+
     Returns:
         MongoDbTrackingStore instance
     """
+    # Import here to avoid circular imports
+    from mlflow_mongodb.tracking.mongodb_store import MongoDbTrackingStore
     return MongoDbTrackingStore(store_uri, artifact_uri)
 
 
-def get_mongodb_model_registry_store(store_uri: str, tracking_uri: Optional[str] = None) -> MongoDbModelRegistryStore:
+def get_mongodb_model_registry_store(store_uri: str, tracking_uri: Optional[str] = None):
     """
     Get MongoDB model registry store instance.
-    
+
     Args:
         store_uri: MongoDB connection URI
         tracking_uri: Tracking store URI (optional)
-        
+
     Returns:
         MongoDbModelRegistryStore instance
     """
+    # Import here to avoid circular imports
+    from mlflow_mongodb.model_registry.mongodb_store import MongoDbModelRegistryStore
     return MongoDbModelRegistryStore(store_uri, tracking_uri)
 
 
 # Plugin entry points for MLflow store registration
+def register_stores():
+    """Alias for register_mongodb_stores for compatibility"""
+    return register_mongodb_stores()
+
+
 def register_mongodb_stores():
     """Register MongoDB stores with MLflow (for plugin-based registration)"""
     try:

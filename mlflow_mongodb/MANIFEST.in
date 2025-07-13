@@ -1,0 +1,8 @@
+include *.py
+include requirements.txt
+recursive-include tracking *.py
+recursive-include model_registry *.py
+recursive-include tests *.py
+recursive-include scripts *.py
+global-exclude *.pyc
+global-exclude __pycache__

@@ -1,0 +1,42 @@
+include README.md
+include LICENSE
+include config/requirements.txt
+
+# Include main package
+recursive-include mlflow_mongodb *.py
+recursive-include mlflow_mongodb *.md
+recursive-include mlflow_mongodb *.env
+recursive-include mlflow_mongodb *.txt
+
+# Include MongoDB tests
+recursive-include mlflow_mongodb/tests *.py
+recursive-include mlflow_mongodb/tests *.md
+
+# Include MongoDB scripts
+recursive-include mlflow_mongodb/scripts *.py
+recursive-include mlflow_mongodb/scripts *.md
+
+# Include MongoDB examples
+recursive-include mlflow_mongodb/examples *.py
+recursive-include mlflow_mongodb/examples *.md
+
+# Include MongoDB config
+recursive-include mlflow_mongodb/config *.env
+recursive-include mlflow_mongodb/config *.txt
+recursive-include mlflow_mongodb/config *.md
+
+# Include MongoDB docs
+recursive-include mlflow_mongodb/docs *.md
+recursive-include mlflow_mongodb/docs *.txt
+
+# Global exclusions
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.log
+global-exclude *.db
+global-exclude .venv
+global-exclude .pytest_cache
+global-exclude temp/*
+global-exclude logs/*
+global-exclude artifacts/*

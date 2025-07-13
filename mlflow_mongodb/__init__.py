@@ -4,6 +4,7 @@ MongoDB Store Implementation for MLflow 3.0+
 This package provides MongoDB-based storage backends for MLflow tracking and model registry.
 """
 
+__version__ = "1.0.0"
 __all__ = ["MongoDbTrackingStore", "MongoDbModelRegistryStore"]
 
 def __getattr__(name):
