@@ -744,38 +744,42 @@ class MongoDbTrackingStore(AbstractStore):
         page_token: str = None,
     ) -> PagedList[Run]:
         """Search for runs"""
-        print(f"DEBUG: search_runs called with experiment_ids={experiment_ids}, run_view_type={run_view_type}")
-
         # Convert RepeatedScalarContainer to list if needed
-        if hasattr(experiment_ids, '__iter__') and not isinstance(experiment_ids, str):
-            # Handle protobuf RepeatedScalarContainer
-            exp_ids = []
-            for exp_id in experiment_ids:
-                if isinstance(exp_id, (list, tuple)):
-                    exp_ids.extend(exp_id)
-                else:
-                    exp_ids.append(str(exp_id))
-        else:
-            exp_ids = [str(experiment_ids)] if not isinstance(experiment_ids, list) else [str(x) for x in experiment_ids]
 
-        print(f"DEBUG: processed exp_ids={exp_ids}")
+        # Handle different types of experiment_ids input
+        # Check for protobuf RepeatedScalarContainer first
+        if str(type(experiment_ids)).find('RepeatedScalarContainer') != -1:
+            # Handle protobuf RepeatedScalarContainer
+            exp_ids = [str(exp_id) for exp_id in experiment_ids]
+        elif isinstance(experiment_ids, str):
+            # Check if it's a string representation of a list
+            if experiment_ids.startswith('[') and experiment_ids.endswith(']'):
+                try:
+                    import ast
+                    parsed_list = ast.literal_eval(experiment_ids)
+                    exp_ids = [str(x) for x in parsed_list]
+                except:
+                    exp_ids = [experiment_ids]
+            else:
+                exp_ids = [experiment_ids]
+        elif isinstance(experiment_ids, list):
+            # Already a list, just convert elements to strings
+            exp_ids = [str(x) for x in experiment_ids]
+        elif hasattr(experiment_ids, '__iter__'):
+            # Handle other iterables
+            exp_ids = [str(exp_id) for exp_id in experiment_ids]
+        else:
+            # Single value - convert to list
+            exp_ids = [str(experiment_ids)]
 
         # Build query
         query = {"experiment_id": {"$in": exp_ids}}
-        print(f"DEBUG: initial query={query}")
 
         # Apply view type filter
         if run_view_type == ViewType.ACTIVE_ONLY:
             query["lifecycle_stage"] = LifecycleStage.ACTIVE
         elif run_view_type == ViewType.DELETED_ONLY:
             query["lifecycle_stage"] = LifecycleStage.DELETED
-
-        print(f"DEBUG: final query={query}")
-
-        # Check what's actually in the database
-        total_docs = self.runs_collection.count_documents({})
-        matching_docs = self.runs_collection.count_documents(query)
-        print(f"DEBUG: total docs in collection={total_docs}, matching query={matching_docs}")
 
         # Apply filter string (simplified implementation)
         if filter_string:
@@ -833,58 +837,15 @@ class MongoDbTrackingStore(AbstractStore):
             cursor = cursor.skip(int(page_token))
 
         runs = []
-        doc_count = 0
         for doc in cursor.limit(max_results):
-            doc_count += 1
-            print(f"DEBUG: processing doc {doc_count}: {doc.get('run_uuid', 'unknown')}")
             runs.append(self._run_doc_to_entity(doc))
-
-        print(f"DEBUG: processed {doc_count} documents, created {len(runs)} run entities")
 
         # Check if there are more results
         next_page_token = None
         if len(runs) == max_results:
             next_page_token = str((int(page_token) if page_token else 0) + max_results)
 
-        print(f"DEBUG: returning {len(runs)} runs")
         return PagedList(runs, next_page_token)
-
-
-
-        # # Execute query without sorting for now
-        # cursor = self.runs_collection.find(query)
-        # _logger.info(f"  cursor created, about to iterate")
-
-        # # Apply pagination
-        # if page_token:
-        #     cursor = cursor.skip(int(page_token))
-        #     _logger.info(f"  applied pagination skip: {page_token}")
-
-        # runs = []
-        # doc_count = 0
-        # _logger.info(f"  starting to iterate cursor with max_results: {max_results}")
-
-        # for doc in cursor.limit(max_results):
-        #     doc_count += 1
-        #     _logger.info(f"  processing document {doc_count}: run_id={doc.get('run_uuid', 'unknown')}")
-        #     try:
-        #         run_entity = self._run_doc_to_entity(doc)
-        #         runs.append(run_entity)
-        #         _logger.info(f"  successfully converted document {doc_count} to run entity")
-        #     except Exception as e:
-        #         _logger.error(f"  error converting document {doc_count} to run entity: {e}")
-        #         import traceback
-        #         traceback.print_exc()
-
-        # _logger.info(f"  processed {doc_count} documents, created {len(runs)} run entities")
-
-        # # Check if there are more results
-        # next_page_token = None
-        # if len(runs) == max_results:
-        #     next_page_token = str((int(page_token) if page_token else 0) + max_results)
-
-        # _logger.info(f"  returning PagedList with {len(runs)} runs, next_page_token: {next_page_token}")
-        # return PagedList(runs, next_page_token)
     
     # Batch operations
     def log_batch(self, run_id: str, metrics: List[Metric], params: List[Param], tags: List[RunTag]) -> None:
